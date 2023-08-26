@@ -15,7 +15,7 @@ function TaskForm(props:prop){
     const [desc, setDesc]=useState("");
     const [dis, setDis]=useState(false);
     const [error,setError]=useState(false);
-    const id:string=localStorage.getItem("id")
+    const id: string = localStorage.getItem("id") || "";
 
     function handleSubmit(){
         if(title.length==0||desc.length==0){

@@ -1,20 +1,31 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import axiosInstance from "../api/api";
-import { Box, Button, Card, CardContent, Paper, Stack, Typography } from "@mui/material";
-import { Check, Clear, Delete } from "@mui/icons-material";
+import TaskCard from "./TaskCard";
+import { Grid, Paper, Typography } from "@mui/material";
+
 
 interface Task {
     _id: string,
     task: string,
     desc: string,
-    complete:boolean
+    complete: boolean
 }
 
 function TaskCards() {
-    const token: string = localStorage.getItem("id")
+    const token: string = localStorage.getItem("id") || "";
     const [tasks, setTasks] = useState<Task[]>([]);
-    const [rerender,setRerender]=useState(false);
+    const [pending,setPending]=useState<Task[]>([]);
+    const [rerender, setRerender] = useState(false);
+
+    useEffect(()=>{
+        const pendTask=JSON.parse(localStorage.getItem("pending")||'[]');
+        if(pendTask.length!==0){
+            setPending([...pendTask]);
+        }
+    },[]);
+
     useEffect(() => {
+        localStorage.setItem("pending", JSON.stringify(pending));
         const data = new URLSearchParams({
             id: token
         });
@@ -22,78 +33,126 @@ function TaskCards() {
             .then(res => {
                 //console.log(res);
                 const task: Array<Task> = res.data.userTask
-                if(task==undefined){
+                if (task == undefined) {
                     setTasks([]);
                     return;
                 }
                 setTasks([...task]);
             })
             .catch(err => { console.log(err) })
-    }, [rerender,token])
+    }, [rerender, token, pending])
 
-    function handleComplete(e) {
-        const task_id:string=e.target.id;
-        const data=new URLSearchParams({
+    function handleComplete(id:string) {
+        const task_id: string = id;
+        const data = new URLSearchParams({
             task_id: task_id,
             id: token
         })
-        axiosInstance.patch("api/task/update",data)
-        .then(res=>{
-            console.log(res);
-            setRerender((prevRerender)=>(!prevRerender));
-        })
-        .catch(err=>{console.log(err)})
+        axiosInstance.patch("api/task/update", data)
+            .then(res => {
+                console.log(res);
+                setRerender((prev: boolean) => (!prev));
+            })
+            .catch(err => { console.log(err) })
     }
 
-    function handleDelete(e){
-        const task_id:string=e.target.id;
-        const data=new URLSearchParams({
-            id: token
-        })
-        axiosInstance.delete(`api/task/delete/${task_id}`, data)
-        .then(res=>{
-            console.log(res);
-            setRerender((prevRerender)=>(!prevRerender));
-        })
-        .catch(err=>{console.log(err)})
+    function handleTodo(e: React.DragEvent<HTMLDivElement>){
+        const id=e.dataTransfer.getData('id');
+        console.log("dropped in todo");
+        if(pending.find(task=>task._id===id)){
+            const newPending=pending.filter(task=>task._id!==id);
+            console.log(newPending);
+            setPending([...newPending]);
+        }
+        else {
+            handleComplete(id);
+        }
     }
 
+    function handleNotPending(e: React.DragEvent<HTMLDivElement>){
+        const id=e.dataTransfer.getData('id');
+        //if(pending.find(task=>task._id===id))
+        handleComplete(id);
+        const newPending=pending.filter(task=>task._id!==id);
+        console.log(newPending);
+        setPending([...newPending]);
+    }
 
+    function handleDrop(e: React.DragEvent<HTMLDivElement>){
+        const id=e.dataTransfer.getData("id");
+        console.log("Item dropped");
+        const dropTask=tasks.find(task=>task._id===id);
+        const newTask:Task[]=tasks.filter(task=>task._id!==id);
+        if( dropTask===undefined) return;
+        if(dropTask.complete===true){
+            dropTask.complete=false;
+            handleComplete(id);
+        }
+        setPending((prev:Task[])=>[dropTask,...prev]);
+        setTasks([...newTask]);
+        console.log(pending);
+    }
+    function handleHover(e: React.DragEvent<HTMLDivElement>){
+        e.preventDefault();
+        console.log("Item hovering")
+    }
 
-
-    if (tasks.length !== 0) {
         return (
-            <Box style={{ margin: "5px 0px", width: "100%", height: '88vh', overflow: "auto", display: "flex", flexWrap: "wrap" }} gap={3}>
+            <>
+            <Grid container columnGap={10} spacing={2} sx={{margin:"20px 0px", display:"flex" , justifyItems:"center", justifyContent:"center" }} >
+            <Grid item sm={12} md={3} lg={3}>
+            <Paper sx={{height:"80vh", width:"auto" , overflow:"auto", padding:"10px 20px"}} elevation={10} onDragOver={handleHover} onDrop={handleTodo}>
+                <Typography variant="h5" component="div" style={{ textAlign: "center", padding:"10px"}}>
+                    To-Do
+                </Typography>
+                <Grid container spacing={2} marginTop={1} sx={{display:"flex", justifyItems:'center', justifyContent:'center'}}>
                 {tasks.map(task => {
-                    return (
-                        <Paper key={task._id} style={{ width: "20%", height: "25vh", padding: "20px", margin: "40px 5px" }} elevation={5}>
-                            <Card sx={{ width: "100%", height: "20vh", overflow: "auto" }} elevation={-1} >
-                                <CardContent>
-                                    <Typography variant="h6" noWrap component="div" sx={task.complete?{ textDecoration: 'line-through' }:{}}>
-                                        {task.task}
-                                    </Typography>
-                                    <Typography sx={{ margin: "10px 0px" }} color="text.secondary">
-                                        {task.desc}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                            <Stack direction="row" spacing={2} >
-                                <Button variant="outlined" id={task._id} onClick={handleDelete} color="error" startIcon={<Delete />}>
-                                    Delete
-                                </Button>
-                                <Button variant="outlined" color={task.complete?"error":"primary"} id={task._id} onClick={handleComplete} startIcon={task.complete?<Clear />:<Check />}>
-                                    {task.complete?"Not Complete":"Completed"}
-                                </Button>
-                            </Stack>
-                        </Paper>
-                    )
+                    if(task.complete===false){
+                        if(pending.find(_=>_._id===task._id)) return;
+                        return (
+                            <TaskCard task={task} token={token} setRerender={setRerender} key={task._id}/>
+                        )
+                    }
                 })}
-            </Box>
+                </Grid>
+
+            </Paper>
+            </Grid>
+            <Grid item sm={12} md={3} lg={3}>
+            <Paper sx={{height:"80vh", width:"auto" , overflow:"auto", padding:"10px 20px"}} elevation={10} onDrop={handleDrop} onDragOver={handleHover}>
+                <Typography variant="h5" component="div" style={{ textAlign: "center", padding:"10px" }}>
+                    Doing
+                </Typography>
+                <Grid container spacing={2} marginTop={1} sx={{display:"flex", justifyItems:'center', justifyContent:'center'}}>
+                {pending.map(task => {
+                        const check=tasks.find(t=>t._id===task._id);
+                        if(check?.complete) return
+                        return (
+                            <TaskCard task={task} token={token} setRerender={setRerender} key={task._id} pending={pending} setPending={setPending}/>
+                        )
+                })}
+                </Grid>
+            </Paper>
+            </Grid>
+            <Grid item sm={12} md={3} lg={3}>
+            <Paper sx={{height:"80vh", width:"auto" , overflow:"auto", padding:"10px 20px"}} elevation={10} onDragOver={handleHover} onDrop={handleNotPending} >
+                <Typography variant="h5" component="div" style={{ textAlign: "center", padding:"10px" }}>
+                    Done
+                </Typography>
+                <Grid container spacing={2} marginTop={1} sx={{display:"flex", justifyItems:'center', justifyContent:'center'}}>
+                {tasks.map(task => {
+                    if(task.complete===true)
+                        return (
+                            <TaskCard task={task} token={token} setRerender={setRerender} key={task._id}/>
+                        )
+                })}
+                </Grid>
+
+            </Paper>
+            </Grid>
+            </Grid>
+            </>
         )
-    }
-    return (
-        <Typography variant="h3" noWrap component="div" style={{textAlign:"center", padding: "20px", margin: "40px 5px"}}>Add Some Tasks</Typography>
-    )
 }
 
 export default TaskCards;

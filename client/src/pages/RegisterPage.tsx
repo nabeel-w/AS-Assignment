@@ -70,7 +70,7 @@ function RegisterPage(){
             setRedirect(true);
         })
         .catch((err)=>{
-            console.log(err.response.status);
+            console.log(err.response);
             const status=err.response.status;
             if(status===409){
                 setEmailError(true);
@@ -78,6 +78,7 @@ function RegisterPage(){
                 setDis(false);
                 return;
             }
+            setDis(false);
         });
 
         
